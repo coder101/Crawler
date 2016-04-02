@@ -1,14 +1,8 @@
-import sun.misc.IOUtils;
-
-import javax.swing.text.MutableAttributeSet;
-import javax.swing.text.html.HTML;
-import javax.swing.text.html.parser.ParserDelegator;
 import java.io.*;
 import java.net.URL;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import static javax.swing.text.html.HTMLEditorKit.*;
 
 /**
  * Created By Pavithra & Kiana
@@ -145,8 +139,8 @@ public class WikiCrawler {
 
     void ProcessLinks(graphNode node1){
         String parent = node1.child;
-        final List<graphNode> links = new LinkedList<graphNode>();
-        final List<graphNode> edges = new LinkedList<graphNode>();
+       // final List<graphNode> links = new LinkedList<graphNode>();
+       // final List<graphNode> edges = new LinkedList<graphNode>();
         final HashMap<String,graphNode> uniqueEdges = new HashMap<String,graphNode>();
         for(String address : node1.links) {
 
@@ -157,7 +151,7 @@ public class WikiCrawler {
             address = address.replace("\"", "");
             if (address != null && (!CrawlerForbiddenURL.containsKey(address))) {
                // System.out.println(address);  //revert
-                if (address.startsWith("/wiki/") && !address.contains(":") && (!address.contains("#"))) {
+                if ( !address.contains(":") && (!address.contains("#"))) {
                     //System.out.println(parent + " " + address);
                     graphNode node = new graphNode(parent, address);
 
@@ -168,10 +162,10 @@ public class WikiCrawler {
                             System.out.println("Downloading and processing " + countDownload++ + " " + address + "  No of Visited nodes -" + visited.size());
 
                             if (node.DowloadPageAndLinks(BASE_URL)) {
-                                    links.add(node);
+                                    queue.add(node);
                                     if (!uniqueEdges.containsKey(address)) {
                                         uniqueEdges.put(address, node);
-                                        edges.add(node);
+                                        crawled.add(node);
                                     }
                                     visited.add(address);
                             }
@@ -179,8 +173,8 @@ public class WikiCrawler {
                                 visitedIrrelevant.add(address);
                             }
                         } else {
-                            if (!uniqueEdges.containsKey(address)) {
-                                edges.add(node);
+                            if (!visitedIrrelevant.contains(address) && !uniqueEdges.containsKey(address)) {
+                                crawled.add(node);
                                 uniqueEdges.put(address, node);
                             }
                         }
@@ -188,8 +182,8 @@ public class WikiCrawler {
                 }
             }
         }
-        queue.addAll(links);
-        crawled.addAll(edges);
+        //queue.addAll(links);
+       // crawled.addAll(edges);
     }
 
 
@@ -199,7 +193,7 @@ public class WikiCrawler {
         final HashMap<String,graphNode> uniqueEdges = new HashMap<String,graphNode>();
         for(String address: node.links){
             address = address.replace("\"","");
-            if (address.startsWith("/wiki/") &&  address != null && address.compareToIgnoreCase(node.child)!=0) {// revert
+            if ( address != null && address.compareToIgnoreCase(node.child)!=0) {// revert
                 if ( (!address.contains(":")) && (!address.contains("#"))) {
                     graphNode node1 = new graphNode(node.child, address);
 
@@ -238,8 +232,9 @@ class graphNode {
         Matcher mLink;
         Pattern pLink = null;
 
-        String HTML_HREF_TAG_PATTERN = "\\s*(?i)href\\s*=\\s*(\"([^\"]*\")|'[^']*'|([^'\">\\s]+))";
-        pLink = Pattern.compile(HTML_HREF_TAG_PATTERN);
+        //String HTML_HREF_TAG_PATTERN = "\\s*(?i)href\\s*=\\s*(\"([^\"]*\")|'[^']*'|([^'\">\\s]+))";
+        String hrefPattern = "/wiki/(?:[A-Za-z0-9-._~!#$&'()*+,;=:@]|%[0-9a-fA-F]{2})*";
+        pLink = Pattern.compile(hrefPattern);
 
 
 
@@ -277,13 +272,14 @@ class graphNode {
                  if(line.contains(str))
                  keys.remove(str);
              }
-             if(foundp )
+             if(foundp && line.contains("<a href="))
              {
+
                 mLink = pLink.matcher(line);
 
                 while(mLink.find())
                 {
-                    String address = mLink.group(1);
+                    String address = line.substring(mLink.start(0),mLink.end(0));//mLink.group(1);
                     links.add(address);
                 }
             }

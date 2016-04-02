@@ -7,5 +7,6 @@ public class WikiTennisCrawler {
         String []keywords ={"tennis","grand slam"};
 
         WikiCrawler cr = new WikiCrawler("/wiki/tennis", keywords, 1000, "D:\\WikiTennisGraph.txt");
+        cr.crawl();
     }
 }
