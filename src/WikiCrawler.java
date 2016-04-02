@@ -76,8 +76,11 @@ public class WikiCrawler {
             visited.add(parent);
 
             graphNode seed = new graphNode("",parent);
-            seed.DownloadPage(BASE_URL);
-            queue.add(seed);
+
+            if (!CrawlerForbiddenURL.containsKey(parent)) {
+                seed.DownloadPage(BASE_URL);
+                queue.add(seed);
+            }
             int requestCount;
 
             //Get max nodes
@@ -114,29 +117,22 @@ public class WikiCrawler {
         }
     }
     void InitialiseRobotExclusion(){
-
         try{
+            graphNode node = new graphNode(BASE_URL,"/robots.txt");
+            node.DownloadPage(BASE_URL);
+            int index = 0,i =1;
+            String[] lines = node.content.split("\n");
+            for(String line :lines){
+                if (line.startsWith("disallow")) {
 
-        URL urlStream = new URL(BASE_URL);
-        graphNode node = new graphNode("","/robots.txt");
-        node.DownloadPage("https://"+urlStream.getHost());
-        String robot =  node.content;
-        int index = 0;
-        String disallow = "Disallow";
-            Integer i =1;
-        while ((index = robot.indexOf(disallow, index)) != -1) {
-            index += disallow.length();
-            String strPath = robot.substring(index);
-            StringTokenizer st = new StringTokenizer(strPath);
-
-            if (!st.hasMoreTokens())
-                break;
-
-            String strBadPath = st.nextToken();
-            CrawlerForbiddenURL.put(strBadPath,i);
-            i++;
-
-        }
+                    String forbiddenURL="";
+                    int start = line.indexOf(":") + 1;
+                    int end   = line.length();
+                    forbiddenURL = line.substring(start, end).trim();
+                    CrawlerForbiddenURL.put(forbiddenURL,i);
+                    i++;
+                }
+            }
         } catch (Exception e) {
 
             e.printStackTrace();
