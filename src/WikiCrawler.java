@@ -1,8 +1,7 @@
 import java.io.*;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Created By Pavithra & Kiana
@@ -14,47 +13,36 @@ import java.util.regex.Pattern;
 
 public class WikiCrawler {
 
-
     //initialise the queue and visited list
-    Queue<graphNode> queue = new LinkedList<graphNode>();
+    Queue<GraphNode> queue = new LinkedList<GraphNode>();
     Set<String> visited = new HashSet<String>();
     Set<String> visitedIrrelevant = new HashSet<String>();
-    List<graphNode> crawled= new LinkedList<graphNode>();
-    HashMap <String,Integer> CrawlerForbiddenURL = new HashMap <String,Integer>();
-    public static void  main(String[] arg){
+    List<GraphNode> crawled = new LinkedList<GraphNode>();
+    HashMap<String, Integer> CrawlerForbiddenURL = new HashMap<String, Integer>();
 
-        String []keywords ={"tennis","grand slam"};
-
-        WikiCrawler cr = new WikiCrawler("/wiki/tennis", keywords, 100, "D:\\trialiastate.txt");
-
-        long startTime = System.currentTimeMillis();
-        cr.crawl();
-        long endTime = System.currentTimeMillis();
-        long timeTaken = endTime - startTime;
-        //System.out.println("time taken "+timeTaken/1000+" download time"+graphNode.totalTime/1000);
-
-        System.out.println("Data Written to file");
-
-    }
     /****************************************************
-     * seedURL is the root page where we begin crawling
-     * keywords are used to search for the pages relevant to search query or interest
-     * maxGraphNodes is the max num of relevant web pages to be collected
+     * seedUrlSubString is the root page where we begin crawling.
+     * keywords are used to search for the pages relevant to search query or interest.
+     * maxGraphNodes is the max num of relevant web pages to be collected.
      * fileName is the destination to which the webgraph will be saved
      */
-    public   String m_seed,m_fileName;
-    public  String[] m_keyWords;
+
+    public String seedUrlSubString, filename;
+    public String[] keywords;
     public static String BASE_URL = "https://en.wikipedia.org";//revert  "http://www.cs.iastate.edu/"
-    public  Integer m_maxNodes;
-    public static int countDownload =0;
-    WikiCrawler(String seedURL,String [] keyWords, Integer maxGraphNodes, String fileName){
-        m_seed = seedURL;
-        m_keyWords = keyWords;
-        for(int i=0;i< keyWords.length;i++){
-            m_keyWords[i] = m_keyWords[i].toLowerCase();
+    public Integer maxGraphNodes;
+    public static int downloadCount = 0;
+
+    WikiCrawler(String subDomain, String[] queryWords, Integer nodeLimits,
+                String outputFileName) throws Exception {
+
+        this.seedUrlSubString = subDomain;
+        this.keywords = queryWords;
+        for (int i = 0; i < queryWords.length; i++) {
+            this.keywords[i] = queryWords[i].toLowerCase();
         }
-        m_maxNodes = maxGraphNodes;
-        m_fileName = fileName;
+        this.maxGraphNodes = nodeLimits;
+        this.filename = outputFileName;
     }
 
     /***************************************************************
@@ -64,138 +52,151 @@ public class WikiCrawler {
 
         try {
 
-            //initialse page to seedURL
-
-            InitialiseRobotExclusion();
-            if(CrawlerForbiddenURL.containsKey("*"))
-            {
-                System.out.println("The site forbids download of all pages through crawlers...hence exiting");
-            }
-            URL url = new URL(BASE_URL + m_seed);
-            String parent = m_seed,graph="";
-            int isRoot =1;
-            visited.add(parent);
-
-            graphNode.keyWords = m_keyWords.clone();
-            graphNode seed = new graphNode("",parent);
-            if (!CrawlerForbiddenURL.containsKey(parent)) {
-                seed.DowloadPageAndLinks(BASE_URL);
-                queue.add(seed);
-            }
-            //Get max nodes
-            while(!queue.isEmpty()) {
-                graphNode node = queue.remove();
-                ProcessLinks(node);
-
-                if (visited.size() > m_maxNodes) { //seed + max nodes so >
-                    break;
-                }
-
-            }
-            while(!queue.isEmpty()) {
-                graphNode node = queue.remove();
-
-                extractEdgesFromLinks(node);
-            }
-
-            PrintWriter writer = new PrintWriter(m_fileName, "UTF-8");
-
-            writer.println((visited.size()-1));
-
-            for (graphNode link : crawled) {
-                writer.println(link.parent + " " + link.child);
-            }
-            writer.close();
+            this.checkCrawlerAccess();
+            this.crawlWebPages();
+            this.printLog();
 
         } catch (Exception e) {
 
             //e.printStackTrace();
-            System.out.println(" Exception "+e.getLocalizedMessage());
-        }
-    }
-    void InitialiseRobotExclusion(){
-    try{
-        graphNode node = new graphNode(BASE_URL,"/robots.txt");
-        node.DownloadPage(BASE_URL);
-        int index = 0,i =1;
-        String[] lines = node.content.split("\n");
-        for(String line :lines){
-                if (line.startsWith("disallow")) {
-
-                    String forbiddenURL="";
-                    int start = line.indexOf(":") + 1;
-                    int end   = line.length();
-                    forbiddenURL = line.substring(start, end).trim();
-                    CrawlerForbiddenURL.put(forbiddenURL,i);
-                    i++;
-                }
-            }
-        } catch (Exception e) {
-
-            e.printStackTrace();
+            System.out.println(" Exception " + e.getLocalizedMessage());
         }
     }
 
+    void printLog() throws FileNotFoundException, UnsupportedEncodingException {
+        PrintWriter writer = new PrintWriter(filename, "UTF-8");
 
-    void ProcessLinks(graphNode node1){
-        String parent = node1.child;
-       // final List<graphNode> links = new LinkedList<graphNode>();
-       // final List<graphNode> edges = new LinkedList<graphNode>();
-        final HashMap<String,graphNode> uniqueEdges = new HashMap<String,graphNode>();
-        for(String address : node1.links) {
+        //total no of pages crawled
+        writer.println((visited.size() - 1));
 
-            if (visited.size() > m_maxNodes) {
+        for (GraphNode link : crawled) {
+            writer.println(link.parent + " " + link.child);
+        }
+        writer.close();
+    }
+
+    void crawlWebPages() throws MalformedURLException {
+        this.initializeQueue();
+        this.downloadMaxGraphNodes();
+        this.processGraph();
+    }
+
+    void downloadMaxGraphNodes() {
+        while (!queue.isEmpty()) {
+            GraphNode node = queue.remove();
+            processLinks(node);
+
+            if (visited.size() > maxGraphNodes) { //seed + max nodes so >
                 break;
             }
 
-            address = address.replace("\"", "");
-            if (address != null && (!CrawlerForbiddenURL.containsKey(address))) {
-               // System.out.println(address);  //revert
-                if ( !address.contains(":") && (!address.contains("#"))) {
-                    //System.out.println(parent + " " + address);
-                    graphNode node = new graphNode(parent, address);
+        }
+    }
 
-                    if (!parent.equalsIgnoreCase(address)) {
-                        if (!visited.contains(address) && !visitedIrrelevant.contains(address)) {
+    void processGraph() {
+        while (!queue.isEmpty()) {
+            GraphNode node = queue.remove();
+            extractEdgesFromLinks(node);
+        }
+    }
 
+    void initializeQueue() throws MalformedURLException {
+        URL url = new URL(BASE_URL + seedUrlSubString);
+        String parent = seedUrlSubString, graph = "";
+        int isRoot = 1;
+        visited.add(parent);
 
-                            System.out.println("Downloading and processing " + countDownload++ + " " + address + "  No of Visited nodes -" + visited.size());
+        GraphNode.keyWords = keywords.clone();
+        GraphNode seed = new GraphNode("", parent);
+        if (!CrawlerForbiddenURL.containsKey(parent)) {
+            seed.DowloadPageAndLinks(BASE_URL);
+            queue.add(seed);
+        }
+    }
 
-                            if (node.DowloadPageAndLinks(BASE_URL)) {
-                                    queue.add(node);
-                                    if (!uniqueEdges.containsKey(address)) {
-                                        uniqueEdges.put(address, node);
-                                        crawled.add(node);
-                                    }
-                                    visited.add(address);
-                            }
-                            else {
-                                visitedIrrelevant.add(address);
-                            }
-                        } else {
-                            if (!visitedIrrelevant.contains(address) && !uniqueEdges.containsKey(address)) {
-                                crawled.add(node);
-                                uniqueEdges.put(address, node);
-                            }
-                        }
-                    }
+    boolean checkCrawlerAccess() throws Exception {
+        try {
+            GraphNode node = new GraphNode(BASE_URL, "/robots.txt");
+            node.DownloadPage(BASE_URL);
+            int index = 0, i = 1;
+            String[] lines = node.content.split("\n");
+            for (String line : lines) {
+                if (line.startsWith("disallow")) {
+
+                    String forbiddenURL = "";
+                    int start = line.indexOf(":") + 1;
+                    int end = line.length();
+                    forbiddenURL = line.substring(start, end).trim();
+                    CrawlerForbiddenURL.put(forbiddenURL, i);
+                    i++;
                 }
             }
+            if (CrawlerForbiddenURL.containsKey("*")) {
+                throw new Exception("Access Denied in the Site");
+            }
+            return true;
+        } catch (Exception e) {
+            throw e;
         }
-        //queue.addAll(links);
-       // crawled.addAll(edges);
     }
 
 
+    void processLinks(GraphNode node1) {
+        String parent = node1.child;
+        final HashMap<String, GraphNode> uniqueEdges = new HashMap<String, GraphNode>();
+        for (String neighbourLinkAddress : node1.links) {
 
-    void extractEdgesFromLinks(graphNode node) {
+            if (visited.size() > maxGraphNodes) {
+                break;
+            }
 
-        final HashMap<String,graphNode> uniqueEdges = new HashMap<String,graphNode>();
-        for(String address: node.links){
-            address = address.replace("\"","");
-            if ( address != null && address.compareToIgnoreCase(node.child)!=0) {// revert
-                if ( (!address.contains(":")) && (!address.contains("#"))) {
-                    graphNode node1 = new graphNode(node.child, address);
+            neighbourLinkAddress = neighbourLinkAddress.replace("\"", "");
+            if (validAddress(neighbourLinkAddress, parent)) {
+                    GraphNode node = new GraphNode(parent, neighbourLinkAddress);
+
+                    if (!visited.contains(neighbourLinkAddress) && !visitedIrrelevant.contains(neighbourLinkAddress)) {
+
+                        this.processNode(node, neighbourLinkAddress, uniqueEdges);
+                        System.out.println("Downloading and processing " + downloadCount++
+                                + " " + neighbourLinkAddress + "  No of Visited nodes -" + visited.size());
+
+                    } else if (!visitedIrrelevant.contains(neighbourLinkAddress)
+                            && !uniqueEdges.containsKey(neighbourLinkAddress)) {
+                        crawled.add(node);
+                        uniqueEdges.put(neighbourLinkAddress, node);
+                    }
+            }
+        }
+    }
+
+    boolean validAddress(String address, String parent) {
+        return address != null && (!CrawlerForbiddenURL.containsKey(address)) &&
+                (!address.contains(":") && (!address.contains("#"))) &&
+                (!parent.equalsIgnoreCase(address));
+    }
+
+    void processNode(GraphNode node, String address, HashMap<String, GraphNode> uniqueEdges) {
+        if (node.DowloadPageAndLinks(BASE_URL)) {
+            queue.add(node);
+            if (!uniqueEdges.containsKey(address)) {
+                uniqueEdges.put(address, node);
+                crawled.add(node);
+            }
+            visited.add(address);
+        } else {
+            visitedIrrelevant.add(address);
+        }
+    }
+
+
+    void extractEdgesFromLinks(GraphNode node) {
+
+        final HashMap<String, GraphNode> uniqueEdges = new HashMap<String, GraphNode>();
+        for (String address : node.links) {
+            address = address.replace("\"", "");
+            if (address != null && address.compareToIgnoreCase(node.child) != 0) {// revert
+                if ((!address.contains(":")) && (!address.contains("#"))) {
+                    GraphNode node1 = new GraphNode(node.child, address);
 
                     if (visited.contains(address)) {
                         uniqueEdges.put(address, node1);
@@ -206,150 +207,27 @@ public class WikiCrawler {
         }
         crawled.addAll(uniqueEdges.values());
     }
-}
 
+    public static void main(String[] arg) throws Exception {
 
+        String[] keywords = {"tennis", "grand slam"};
+        String urlSubString = "/wiki/tennis";
+        String outputFilename = "D:\\tennisGraph.txt";
+        Integer maxGraphNodes = 100;
 
-
-class graphNode {
-
-    private static final int BUFFER_SIZE = 1024;
-    public static String[] keyWords;
-    static int count=1;
-    String parent, child, content;
-
-    List<String > links = new LinkedList<String >();
-    static double totalTime=0;
-
-    graphNode(String src, String link) {
-        parent = src;
-        child = link;
-    }
-
-    Boolean DowloadPageAndLinks(String baseURL) {
-
-        try{
-        Matcher mLink;
-        Pattern pLink = null;
-
-        //String HTML_HREF_TAG_PATTERN = "\\s*(?i)href\\s*=\\s*(\"([^\"]*\")|'[^']*'|([^'\">\\s]+))";
-        String hrefPattern = "/wiki/(?:[A-Za-z0-9-._~!#$&'()*+,;=:@]|%[0-9a-fA-F]{2})*";
-        pLink = Pattern.compile(hrefPattern);
-
-
-
-        if(count%100 == 0)
-        {
-            Thread.sleep(5000);
-        }
-        count++;
+        WikiCrawler cr = new WikiCrawler(urlSubString, keywords, maxGraphNodes, outputFilename);
 
         long startTime = System.currentTimeMillis();
-
-        URL urlStream = new URL(baseURL+this.child);
-
-        Set<String> keys = new HashSet<String>();
-        for(String str: keyWords){
-            keys.add(str);
-        }
-        // System.out.println("Downloading "+count);
-        InputStream is = urlStream.openStream();
-        BufferedReader br = new BufferedReader(new InputStreamReader(is));
-        String line ="";
-        content ="";
-        Boolean foundp=false;
-        while( (line = br.readLine())!= null)
-         {
-
-             line = line.toLowerCase();
-
-             if(line.contains("<p>")){ //revert
-                 foundp = true;
-             }
-
-
-             for(String str: keyWords){
-                 if(line.contains(str))
-                 keys.remove(str);
-             }
-             if(foundp && line.contains("<a href="))
-             {
-
-                mLink = pLink.matcher(line);
-
-                while(mLink.find())
-                {
-                    String address = line.substring(mLink.start(0),mLink.end(0));//mLink.group(1);
-                    links.add(address);
-                }
-            }
-         }
+        cr.crawl();
         long endTime = System.currentTimeMillis();
         long timeTaken = endTime - startTime;
-        totalTime += timeTaken;
-        is.close();
+//        System.out.println("Time taken " + timeTaken / 1000 + " download time" + graphNode.totalTime / 1000);
 
-        if(!keys.isEmpty()){
-            return false;
-        }
-        } catch (Exception e) {
+        System.out.println("Data Written to file : " + outputFilename);
 
-            //e.printStackTrace();
-            System.out.println("Exception during file download "+e.getLocalizedMessage());
-            return false;
-        }
-
-        return true;
-    }
-
-    Boolean DownloadPage(String baseURL){
-        try{
-
-
-            if(count%100 == 0)
-            {
-                Thread.sleep(5000);
-            }
-            count++;
-
-            long startTime = System.currentTimeMillis();
-
-            URL urlStream = new URL(baseURL+this.child);
-
-            // System.out.println("Downloading "+count);
-            InputStream is = urlStream.openStream();
-            BufferedReader br = new BufferedReader(new InputStreamReader(is));
-            String line ="";
-            content=getString(is);
-            content = content.toLowerCase();
-            long endTime = System.currentTimeMillis();
-            long timeTaken = endTime - startTime;
-            totalTime += timeTaken;
-
-
-            is.close();
-
-        } catch (Exception e) {
-
-            System.out.println("Exception during file download "+e.getLocalizedMessage());
-            return false;
-        }
-
-
-        return true;
-
-    }
-    public static String getString(InputStream inputStream) throws IOException
-    {
-        if (inputStream == null)
-            return null;
-        BufferedReader in = new BufferedReader(new InputStreamReader(inputStream), BUFFER_SIZE);
-        int charsRead;
-        char[] copyBuffer = new char[BUFFER_SIZE];
-        StringBuffer sb = new StringBuffer();
-        while ((charsRead = in.read(copyBuffer, 0, BUFFER_SIZE)) != -1)
-            sb.append(copyBuffer, 0, charsRead);
-        in.close();
-        return sb.toString();
     }
 }
+
+
+
+
