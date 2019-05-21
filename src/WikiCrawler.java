@@ -19,7 +19,7 @@ public class WikiCrawler {
     Set<String> visitedIrrelevant = new HashSet<String>();
     List<GraphNode> crawled = new LinkedList<GraphNode>();
     HashMap<String, Integer> CrawlerForbiddenURL = new HashMap<String, Integer>();
-
+    HashMap<String, GraphNode> uniqueEdges = new HashMap<String, GraphNode>();
     /****************************************************
      * seedUrlSubString is the root page where we begin crawling.
      * keywords are used to search for the pages relevant to search query or interest.
@@ -143,7 +143,6 @@ public class WikiCrawler {
 
     void processLinks(GraphNode node1) {
         String parent = node1.child;
-        final HashMap<String, GraphNode> uniqueEdges = new HashMap<String, GraphNode>();
         for (String neighbourLinkAddress : node1.links) {
 
             if (visited.size() > maxGraphNodes) {
@@ -151,22 +150,29 @@ public class WikiCrawler {
             }
 
             neighbourLinkAddress = neighbourLinkAddress.replace("\"", "");
+
             if (validAddress(neighbourLinkAddress, parent)) {
-                    GraphNode node = new GraphNode(parent, neighbourLinkAddress);
+                GraphNode node = new GraphNode(parent, neighbourLinkAddress);
 
-                    if (!visited.contains(neighbourLinkAddress) && !visitedIrrelevant.contains(neighbourLinkAddress)) {
-
-                        this.processNode(node, neighbourLinkAddress, uniqueEdges);
-                        System.out.println("Downloading and processing " + downloadCount++
-                                + " " + neighbourLinkAddress + "  No of Visited nodes -" + visited.size());
-
-                    } else if (!visitedIrrelevant.contains(neighbourLinkAddress)
-                            && !uniqueEdges.containsKey(neighbourLinkAddress)) {
-                        crawled.add(node);
-                        uniqueEdges.put(neighbourLinkAddress, node);
-                    }
+                if (newLink(neighbourLinkAddress)) {
+                    processNode(node, neighbourLinkAddress);
+                } else {
+                    processVisited(neighbourLinkAddress, node);
+                }
             }
         }
+    }
+
+    void processVisited(String address, GraphNode node) {
+       if (!visitedIrrelevant.contains(address)
+                && !uniqueEdges.containsKey(address)) {
+           crawled.add(node);
+           uniqueEdges.put(address, node);
+       }
+    }
+
+    boolean newLink(String address) {
+        return !visited.contains(address) && !visitedIrrelevant.contains(address);
     }
 
     boolean validAddress(String address, String parent) {
@@ -175,11 +181,11 @@ public class WikiCrawler {
                 (!parent.equalsIgnoreCase(address));
     }
 
-    void processNode(GraphNode node, String address, HashMap<String, GraphNode> uniqueEdges) {
+    void processNode(GraphNode node, String address) {
         if (node.DowloadPageAndLinks(BASE_URL)) {
             queue.add(node);
-            if (!uniqueEdges.containsKey(address)) {
-                uniqueEdges.put(address, node);
+            if (!this.uniqueEdges.containsKey(address)) {
+                this.uniqueEdges.put(address, node);
                 crawled.add(node);
             }
             visited.add(address);
